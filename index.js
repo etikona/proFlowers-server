@@ -20,6 +20,7 @@ const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology:
 async function run(){
     try{
         const serviceCollection = client.db('proFlowers').collection('services');
+        const reviewCollection = client.db('proFlowers').collection('reviews')
         // Send data server to client
         app.get('/services', async(req, res) => {
             const query = {}
@@ -35,6 +36,11 @@ async function run(){
         })
 
         // Get data from client and store in server side
+        app.post('/reviews', async(req, res) => {
+            const review = req.body;
+            const result = await reviewCollection.insertOne(review);
+            res.send(result);
+        })
     }
     finally{
 
