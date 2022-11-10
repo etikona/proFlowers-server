@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
+const jwt = require('jsonwebtoken');
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -17,10 +18,31 @@ app.use(express.json());
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.6hyeg.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
+ function verifyJWT(req, res, next){
+    const authHeader = req.headers.authorization;
+    if(!authHeader){
+        return res.status(401).send({msg: 'Unauthorized access'})
+    }
+    const token = authHeader.split(' ')[1];
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, function(error, decoded){
+        if(error){
+            return res.status(403).send({msg: 'Invalid Token'})
+        }
+        req.decoded = decoded;
+        next()
+    })
+}
+
 async function run() {
     try {
         const serviceCollection = client.db('proFlowers').collection('services');
-        const reviewCollection = client.db('proFlowers').collection('reviews')
+        const reviewCollection = client.db('proFlowers').collection('reviews');
+        app.post('/jwt', async(req, res) => {
+            const user = req.body;
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '2d'})
+            res.send({token})
+        })
+
         // Send data server to client
         app.get('/services', async (req, res) => {
             const query = {}
@@ -38,14 +60,14 @@ async function run() {
         // Get data from client and store in server side
 
         // All reviews 
-        app.get('/reviews/:id', async (req, res) => {
-            const id = req.params.id;
-            const query = {_id : ObjectId(id)};
-            const reviews = await serviceCollection.findOne(query);
-            res.send(reviews)
+        app.get('/reviews', async (req, res) => {
+            const query = {}
+            const cursor = reviewCollection.find(query);
+            const reviews = await cursor.toArray();
+            res.send(reviews);
         })
         // Particular one review 
-        app.get('/reviews', async (req, res) => {
+        app.get('/reviews', verifyJWT, async (req, res) => {
             let query = {};
             if (req.query.name) {
                 query = {
